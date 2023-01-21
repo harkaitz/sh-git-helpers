@@ -24,56 +24,34 @@
 #L:  OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 #L:  WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##:
-#h: Usage: $0 [-e] [-s BRANCH]
+#h: Usage: $0 [USERNAME/]PROJECT
 #h:
-#h: Print the branch you should be working on. You can set it
-#h: in `BRANCH_FILE` or `~/.branches` with WILDCARD BRANCH
-#h: format.
+#h: Print Github project's description using `gh` and `github-h-url`.
 ##:
-#pdeps: git
+#pdeps: gh
 ##:
-git_h_my_branch() (
-    opt_e='' opt_s=''
-    ## Parse command line options.
-    while getopts "es:" optopt; do # OPTARG    
-        case $optopt in
-            e)  opt_e=y;;
-            s)  opt_s="${OPTARG}";;
-            \?) return 1;;
-        esac
-    done
-    shift $(( $OPTIND - 1 ))
-    ## Add branch.
-    if test -n "$opt_s"; then
-        name="`pwd | xargs basename`"
-        if test -e "$BRANCH_FILE"; then
-            sed -i '\|^\*/'"$name"'|d' "$BRANCH_FILE"
-        fi
-        echo "*/$name $opt_s" >> "$BRANCH_FILE"
-    fi
-    ## Edit file.
-    if test -n "$opt_e"; then
-        ${EDITOR:-vi} "${BRANCH_FILE}"
-    fi
-    ## Print branch
-    if test -f "$BRANCH_FILE"; then
-        pwd="`pwd`"
-        while read -r wildcard path ign; do
-            case "$pwd" in $wildcard) echo "$path"; break;; esac
-        done < "$BRANCH_FILE"
-    fi
-)
-BRANCH_FILE="${BRANCH_FILE:-${HOME}/.branches}"
+. github-h-url
+github_h_desc() {
+    url="`github_h_url "$1"`"; test -n "$url"
+    gh repo view --json description --jq .description "$url"
+}
+if test ! -n "${GH_TOKEN}"; then
+    echo >&2 "error: Please set GH_TOKEN=ghp_*"
+    return 1
+elif ! which "gh" >/dev/null 2>&1; then
+    echo >&2 "error: Please install Github's CLI program 'gh'."
+    return 1
+fi
 SCRNAME="`basename "$0"`"
-if test @"${SCRNAME}" = @"git-h-my-branch";then
+if test @"${SCRNAME}" = @"github-h-desc";then
     case "${1}" in
-        -h|--help)
+        ''|-h|--help)
             sed -n 's/^ *#h: \{0,1\}//p' "$0" | sed "s|\\\$0|${SCRNAME}|g"
             echo ""
             sed -n 's/^ *#l: \{0,2\}//p' "$0"
             ;;
         *)
-            git_h_my_branch "$@"
+            github_h_desc "$@"
             ;;
     esac
 fi

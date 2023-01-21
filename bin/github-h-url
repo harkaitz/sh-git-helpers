@@ -24,56 +24,32 @@
 #L:  OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 #L:  WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##:
-#h: Usage: $0 [-e] [-s BRANCH]
+#h: Usage: $0 [USERNAME/]PROJECT
 #h:
-#h: Print the branch you should be working on. You can set it
-#h: in `BRANCH_FILE` or `~/.branches` with WILDCARD BRANCH
-#h: format.
+#h: Print the Github project's URL. If USERNAME is not specified
+#h: then the environment variable GITHUB_USERNAME is used.
 ##:
-#pdeps: git
-##:
-git_h_my_branch() (
-    opt_e='' opt_s=''
-    ## Parse command line options.
-    while getopts "es:" optopt; do # OPTARG    
-        case $optopt in
-            e)  opt_e=y;;
-            s)  opt_s="${OPTARG}";;
-            \?) return 1;;
-        esac
-    done
-    shift $(( $OPTIND - 1 ))
-    ## Add branch.
-    if test -n "$opt_s"; then
-        name="`pwd | xargs basename`"
-        if test -e "$BRANCH_FILE"; then
-            sed -i '\|^\*/'"$name"'|d' "$BRANCH_FILE"
-        fi
-        echo "*/$name $opt_s" >> "$BRANCH_FILE"
+github_h_url() (
+    u="`dirname  "$1"`" p="`basename "$1"`"
+    if test @"$u" = @'.'; then
+        u="${GITHUB_USERNAME}"
     fi
-    ## Edit file.
-    if test -n "$opt_e"; then
-        ${EDITOR:-vi} "${BRANCH_FILE}"
+    if test ! -n "$u"; then
+        echo >&2 "error: Please set GITHUB_USERNAME"
+        return 1
     fi
-    ## Print branch
-    if test -f "$BRANCH_FILE"; then
-        pwd="`pwd`"
-        while read -r wildcard path ign; do
-            case "$pwd" in $wildcard) echo "$path"; break;; esac
-        done < "$BRANCH_FILE"
-    fi
+    echo "https://github.com/${u}/${p}"
 )
-BRANCH_FILE="${BRANCH_FILE:-${HOME}/.branches}"
 SCRNAME="`basename "$0"`"
-if test @"${SCRNAME}" = @"git-h-my-branch";then
+if test @"${SCRNAME}" = @"github-h-url";then
     case "${1}" in
-        -h|--help)
+        ''|-h|--help)
             sed -n 's/^ *#h: \{0,1\}//p' "$0" | sed "s|\\\$0|${SCRNAME}|g"
             echo ""
             sed -n 's/^ *#l: \{0,2\}//p' "$0"
             ;;
         *)
-            git_h_my_branch "$@"
+            github_h_url "$@"
             ;;
     esac
 fi

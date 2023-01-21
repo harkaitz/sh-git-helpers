@@ -37,6 +37,8 @@
 #h: ... c|clone NAME    : Clone project.
 #h: ... u|url [NAME]    : Calculate URL.
 ##:
+#pdeps: ssh git
+##:
 git_ssh() {
     local OPTIND optopt
     ## Parse command line arguments.

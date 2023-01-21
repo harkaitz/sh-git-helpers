@@ -1,0 +1,159 @@
+#!/bin/sh -e
+#L:
+#L:  MIT License
+#L:  
+#l:  Bug reports, feature requests to gemini|https://harkadev.com/oss
+#l:  Copyright (c) 2023 Harkaitz Agirre, harkaitz.aguirre@gmail.com
+#L:
+#L:  Permission is hereby granted, free of charge, to any person obtaining
+#L:  a copy of this software and associated documentation files (the
+#L:  "Software"), to deal in the Software without restriction, including
+#L:  without limitation the rights to use, copy, modify, merge, publish,
+#L:  distribute, sublicense, and/or sell copies of the Software, and to
+#L:  permit persons to whom the Software is furnished to do so, subject to
+#L:  the following conditions:
+#L:
+#L:  The above copyright notice and this permission notice shall be
+#L:  included in all copies or substantial portions of the Software.
+#L:
+#L:  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+#L:  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+#L:  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+#L:  NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+#L:  LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+#L:  OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+#L:  WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+##:
+#h: Usage: $0 ...
+#h:
+#h: This script helps managing your git projects. For this write
+#h: a file in $PROJECTM_FILE with the following format.
+#h:
+#h:     G <group> <title>
+#h:     C <group> <category> <description>
+#h:     D <dir>
+#h:     P <dir>/<name> <origin> <category> <tags...>
+#h:
+#h: You can set where the <dir> are located setting $PROJECTM_PATH. You
+#h: can view the configuration with `$0 show`.
+#h:
+#h: ... dirs|prjs           : Print listed directory and project pathnames.
+#h: ... grps|cats [<group>] : Print listed groups and categories.
+#h: ... prjs-new            : List projects not listed in $PROJECTM_FILE.
+#h: ... prjs-rem <origin>   : List projects in $PROJECTM_FILE with <origin>.
+#h: ... prjs-cat <category> : List projects in $PROJECTM_FILE with <category>.
+#h: ... grp-title <group>   : Get group's title.
+##:
+projectm() {
+    local cmd="$1"
+    shift
+    case "${cmd}" in
+        show)      projectm_show_variables  ;;
+        dirs)      projectm_dirs            ;;
+        prjs)      projectm_prjs            ;;
+        grps)      projectm_grps            ;;
+        cats)      projectm_cats "$@"       ;;
+        prjs-dir)  projectm_prjs_dir        ;;
+        prjs-new)  projectm_prjs_new        ;;
+        prjs-rem)  projectm_prjs_rem  "$@"  ;;
+        prjs-cat)  projectm_prjs_cat  "$@"  ;;
+        grp-title) projectm_grp_title "$@"  ;;
+        cat-descr) projectm_cat_descr "$@"  ;;
+        *)         echo >&2 "error: Invalid argument: ${cmd}."; return 1;;
+    esac
+}
+projectm_show_variables() {
+    cat <<-EOF
+	PROJECTM_FILE : ${PROJECTM_FILE}
+	PROJECTM_PATH : ${PROJECTM_PATH}
+	EOF
+}
+projectm_calc_variables() {
+    PROJECTM_FILE="${PROJECTM_FILE:-${HOME}/projects.lst}"
+    PROJECTM_PATH="`dirname "${PROJECTM_FILE}"`"
+}
+## -------------------------------------------------------------------
+projectm_dirs() {
+    test -f "${PROJECTM_FILE}"
+    sed -n "s|^D *|${PROJECTM_PATH}/|p" "${PROJECTM_FILE}"
+}
+projectm_prjs() {
+    test -f "${PROJECTM_FILE}"
+    sed -n "s|^P *\([^ ]*\).*|${PROJECTM_PATH}/\1|p" "${PROJECTM_FILE}"
+}
+projectm_grps() {
+    test -f "${PROJECTM_FILE}"
+    awk '$1 == "G" {print $2}' "${PROJECTM_FILE}"
+}
+projectm_grp_title() {
+    test -f "${PROJECTM_FILE}"
+    test -n "$1"
+    awk -v g="$1" '
+    $1 == "G" && $2 == g {
+      $1=$2=""
+      print $0
+    }' "${PROJECTM_FILE}" | sed 's|^ *||'
+}
+projectm_cat_descr() {
+    test -f "${PROJECTM_FILE}"
+    test -n "$1"
+    awk -v c="$1" '
+    $1 == "C" && $3 == c {
+      $1=$2=$3=""
+      print $0
+    }' "${PROJECTM_FILE}" | sed 's|^ *||'
+}
+projectm_cats() {
+    test -f "${PROJECTM_FILE}"
+    if test ! -n "$1"; then
+        awk '$1 == "C" {print $3}' "${PROJECTM_FILE}"
+    else
+        awk -v g="$1" '$1 == "C" && $2 == g {print $3}' "${PROJECTM_FILE}"
+    fi
+}
+projectm_prjs_dir() {
+    local IFS=':' d1='' d2=''
+    for d1 in `projectm_dirs | tr '\n' ':'`; do
+        for d2 in `find "${d1}" -mindepth 1 -maxdepth 1 -type d | sort | tr '\n' ':'`; do
+            echo "${d2}"
+        done
+    done
+}
+projectm_prjs_new() {
+    local sed="$(projectm_prjs | sed 's/\(.*\)/\\|\1\$|d/')"
+    projectm_prjs_dir | sed "${sed}"
+}
+projectm_prjs_rem() {
+    if test ! -n "${1}"; then
+        echo >&2 "error: Please specify a remote name."
+        return 1
+    fi
+    if test -f "${PROJECTM_FILE}"; then
+        for n in `awk -v r="$1" 'r == $3 {print $2}' "${PROJECTM_FILE}"`; do
+            if test -d "${PROJECTM_PATH}/${n}"; then
+                echo "${PROJECTM_PATH}/${n}"
+            fi
+        done
+    fi
+}
+projectm_prjs_cat() {
+    if test -f "${PROJECTM_FILE}"; then
+        awk -v c="$1" '$4 == c {print $2}' "${PROJECTM_FILE}" \
+            | xargs -L 1 printf "%s/%s\\n" "${PROJECTM_PATH}"
+    fi
+}
+## -------------------------------------------------------------------
+projectm_calc_variables
+SCRNAME="`basename "$0"`"
+if test @"${SCRNAME}" = @"projectm";then
+    case "${1}" in
+        ''|-h|--help)
+            sed -n 's/^ *#h: \{0,1\}//p' "$0" | sed "s|\\\$0|${SCRNAME}|g"
+            echo ""
+            sed -n 's/^ *#l: \{0,2\}//p' "$0"
+            ;;
+        *)
+            projectm "$@"
+            ;;
+    esac
+fi

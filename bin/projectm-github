@@ -24,56 +24,64 @@
 #L:  OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 #L:  WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##:
-#h: Usage: $0 [-e] [-s BRANCH]
+#h: Usage: $0 -u
 #h:
-#h: Print the branch you should be working on. You can set it
-#h: in `BRANCH_FILE` or `~/.branches` with WILDCARD BRANCH
-#h: format.
+#h: Perform common Github operations on your projects.
+#h:
+#h:     -l        : List Github projects.
+#h:     -u [DIRS] : Update descriptions from Github.
+#h:     -p [DIRS] : Print 'PROJECT: DESCRIPTION' summary.
 ##:
-#pdeps: git
-##:
-git_h_my_branch() (
-    opt_e='' opt_s=''
-    ## Parse command line options.
-    while getopts "es:" optopt; do # OPTARG    
+. projectm
+. github-h-desc
+projectm_github() (
+    ## Parse command line arguments.
+    opt_u='' opt_l='' opt_p=''
+    while getopts "lup" optopt; do
         case $optopt in
-            e)  opt_e=y;;
-            s)  opt_s="${OPTARG}";;
+            l)  opt_l=y;;
+            u)  opt_u=y;;
+            p)  opt_p=y;;
             \?) return 1;;
         esac
     done
     shift $(( $OPTIND - 1 ))
-    ## Add branch.
-    if test -n "$opt_s"; then
-        name="`pwd | xargs basename`"
-        if test -e "$BRANCH_FILE"; then
-            sed -i '\|^\*/'"$name"'|d' "$BRANCH_FILE"
-        fi
-        echo "*/$name $opt_s" >> "$BRANCH_FILE"
+    ## List github projects.
+    if test -n "${opt_l}"; then
+        projectm prjs-rem harkaitz@github
     fi
-    ## Edit file.
-    if test -n "$opt_e"; then
-        ${EDITOR:-vi} "${BRANCH_FILE}"
+    ## Update github descriptions.
+    if test -n "${opt_u}"; then
+        echo -n 'Updating descriptions:'
+        for d in ${@:-`projectm_github -l`}; do
+            n="`basename "$d"`"
+            echo -n " $n"
+            github_h_desc "$n" > "${d}/.git/description" &
+        done
+        echo ''
+        wait
     fi
-    ## Print branch
-    if test -f "$BRANCH_FILE"; then
-        pwd="`pwd`"
-        while read -r wildcard path ign; do
-            case "$pwd" in $wildcard) echo "$path"; break;; esac
-        done < "$BRANCH_FILE"
+    ## Print descriptions.
+    if test -n "${opt_p}"; then
+        for d in ${@:-`projectm_github -l`}; do
+            n="`basename "$d"`"
+            h="`head -n 1 "$d/.git/description" 2>/dev/null || true`"
+            printf '%-20s : %s\n' "$n" "$h"
+        done
     fi
 )
-BRANCH_FILE="${BRANCH_FILE:-${HOME}/.branches}"
+## -------------------------------------------------------------------
 SCRNAME="`basename "$0"`"
-if test @"${SCRNAME}" = @"git-h-my-branch";then
+if test @"${SCRNAME}" = @"projectm-github";then
     case "${1}" in
-        -h|--help)
+        ''|-h|--help)
             sed -n 's/^ *#h: \{0,1\}//p' "$0" | sed "s|\\\$0|${SCRNAME}|g"
             echo ""
             sed -n 's/^ *#l: \{0,2\}//p' "$0"
             ;;
         *)
-            git_h_my_branch "$@"
+            projectm_github "$@"
             ;;
     esac
 fi
+
